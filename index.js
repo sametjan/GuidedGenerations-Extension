@@ -52,8 +52,126 @@ export const extensionName = "GuidedGenerations-Extension"; // Use the simple na
 let isSending = false;
 const INTERNAL_HELPER_PRESET_VALUE = '__GG_INTERNAL_HELPER__';
 
-// Debug message capture array - only populated when debug mode is enabled
-let debugMessages = [];
+// Debug message capture array - only populated when debug mode is enabled.
+// Mirrored into localStorage so the log survives the UI going away. Not
+// sessionStorage: when iOS kills the page process the whole page session is
+// torn down with it, which is exactly the case we need to capture. The mirror
+// also reports its own state on load, so a storage write that silently fails
+// is distinguishable from "the page died before anything was written".
+const DEBUG_STORAGE_KEY = 'gg_debug_messages';
+const DEBUG_STORAGE_MAX_MESSAGES = 200;
+const DEBUG_STORAGE_MAX_ARG_LENGTH = 1000;
+let debugMessages = loadStoredDebugMessages();
+let debugPersistTimer = null;
+
+/**
+ * Builds a synthetic log entry used to annotate the log itself.
+ * @param {string} text - The note to record
+ * @returns {object} A debug message entry
+ */
+function makeDebugMarker(text) {
+    return {
+        timestamp: new Date().toISOString(),
+        level: 'warn',
+        file: 'index.js',
+        line: '-',
+        args: [text],
+    };
+}
+
+/**
+ * Restores debug messages captured before the page reloaded.
+ * @returns {Array} Previously stored messages plus a boundary marker
+ */
+function loadStoredDebugMessages() {
+    let stored = null;
+    try {
+        stored = localStorage.getItem(DEBUG_STORAGE_KEY);
+    } catch (e) {
+        return [makeDebugMarker(`--- debug mirror UNAVAILABLE (${e?.name ?? 'error'}): messages from before a reload cannot be kept ---`)];
+    }
+
+    if (!stored) {
+        return [makeDebugMarker('--- debug mirror EMPTY: storage works, but nothing was written before this load ---')];
+    }
+
+    try {
+        const parsed = JSON.parse(stored);
+        if (!Array.isArray(parsed)) {
+            return [makeDebugMarker('--- debug mirror held unreadable data, discarded ---')];
+        }
+        parsed.push(makeDebugMarker(`--- page (re)loaded - the ${parsed.length} message(s) above are from BEFORE the reload ---`));
+        return parsed;
+    } catch (e) {
+        return [makeDebugMarker('--- debug mirror could not be parsed, discarded ---')];
+    }
+}
+
+/**
+ * Builds a compact copy for storage: recent messages only, with long arguments
+ * truncated, so a flush stays cheap enough to run often on a phone.
+ * @param {Array} messages - The messages to compact
+ * @returns {Array} A storage-sized copy
+ */
+function compactForStorage(messages) {
+    return messages.slice(-DEBUG_STORAGE_MAX_MESSAGES).map(msg => ({
+        ...msg,
+        args: (msg.args ?? []).map(arg => (
+            typeof arg === 'string' && arg.length > DEBUG_STORAGE_MAX_ARG_LENGTH
+                ? `${arg.slice(0, DEBUG_STORAGE_MAX_ARG_LENGTH)}... [truncated for storage]`
+                : arg
+        )),
+    }));
+}
+
+/**
+ * Schedules a throttled write of the debug buffer.
+ */
+function persistDebugMessages() {
+    if (debugPersistTimer) {
+        return;
+    }
+    debugPersistTimer = setTimeout(flushDebugMessages, 300);
+}
+
+/**
+ * Writes the debug buffer to localStorage immediately.
+ * Trims the oldest entries if the storage quota is exceeded.
+ */
+function flushDebugMessages() {
+    if (debugPersistTimer) {
+        clearTimeout(debugPersistTimer);
+        debugPersistTimer = null;
+    }
+    let toStore = compactForStorage(debugMessages);
+    for (let attempt = 0; attempt < 4 && toStore.length > 0; attempt++) {
+        try {
+            localStorage.setItem(DEBUG_STORAGE_KEY, JSON.stringify(toStore));
+            return;
+        } catch (e) {
+            // Most likely a quota error - drop the oldest half and retry.
+            toStore = toStore.slice(Math.ceil(toStore.length / 2));
+        }
+    }
+}
+
+// Flush before the page goes away. iOS Safari does not reliably fire
+// 'beforeunload'/'unload', so 'pagehide' is the one that actually runs when
+// the UI reloads or the tab is discarded.
+window.addEventListener('pagehide', flushDebugMessages);
+
+// Capture failures that never reach debugLog - the guide and tool loaders
+// swallow import errors into console.error, and an unhandled rejection
+// otherwise leaves no trace in the copied log at all.
+window.addEventListener('error', (event) => {
+    captureDebugMessage('error', 'Uncaught error:', event.message, `${event.filename}:${event.lineno}:${event.colno}`, event.error?.stack ?? '');
+    flushDebugMessages();
+});
+window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    captureDebugMessage('error', 'Unhandled promise rejection:', reason?.message ?? String(reason), reason?.stack ?? '');
+    flushDebugMessages();
+});
 
 /**
  * Captures debug messages when debug mode is enabled
@@ -72,12 +190,16 @@ function captureDebugMessage(level, ...args) {
         if (stack) {
             // Parse stack trace to find the calling function
             const stackLines = stack.split('\n');
-            // Look for the first line that's not from this file or the debug functions
-            for (let i = 1; i < stackLines.length; i++) {
+            // Look for the first line that's not from this file or the debug
+            // functions. Start at 0: V8 prefixes an "Error" header line, but
+            // Safari/iOS does not, so skipping index 0 would drop a real frame.
+            for (let i = 0; i < stackLines.length; i++) {
                 const line = stackLines[i];
-                if (line && !line.includes('captureDebugMessage') && !line.includes('debugLog') && !line.includes('debugWarn')) {
-                    // Extract file and line info from stack trace
-                    const match = line.match(/\((.+):(\d+):(\d+)\)/) || line.match(/at (.+):(\d+):(\d+)/);
+                if (line && !line.includes('captureDebugMessage') && !line.includes('debugLog') && !line.includes('debugWarn') && !line.includes('debugError')) {
+                    // Extract file and line info from stack trace. The third
+                    // pattern is Safari/iOS ("func@url:line:col"); without it
+                    // every entry logged on an iPhone reads "Unknown:Unknown".
+                    const match = line.match(/\((.+):(\d+):(\d+)\)/) || line.match(/at (.+):(\d+):(\d+)/) || line.match(/@(.+):(\d+):(\d+)/);
                     if (match) {
                         const fullPath = match[1];
                         // Extract just the filename from the full path
@@ -111,6 +233,14 @@ function captureDebugMessage(level, ...args) {
         // Keep only the last 1000 messages to prevent memory issues
         if (debugMessages.length > 1000) {
             debugMessages = debugMessages.slice(-1000);
+        }
+
+        // Errors and warnings are written at once: if the page is about to be
+        // torn down, a throttled write may never run.
+        if (level === 'error' || level === 'warn') {
+            flushDebugMessages();
+        } else {
+            persistDebugMessages();
         }
     }
 }
@@ -161,6 +291,11 @@ export function getDebugMessages() {
  */
 export function clearDebugMessages() {
     debugMessages = [];
+    try {
+        localStorage.removeItem(DEBUG_STORAGE_KEY);
+    } catch (e) {
+        // Ignore - storage may be unavailable (private mode, quota, etc.)
+    }
 }
 
 /**
@@ -1643,8 +1778,11 @@ function waitForAssistantMessageRenderedAfter(eventStartedAt, context) {
 $(document).ready(async function () {
     const context = getContext(); // Get the context here
 
-    // Clear debug messages on page refresh to prevent memory buildup
-    clearDebugMessages();
+    // Deliberately not clearing the debug buffer here. Messages restored from
+    // the previous page load are the only record of what happened before the
+    // UI reloaded, and clearing on ready threw them away a second later.
+    // Buildup is already bounded: 1000 messages in memory, 200 mirrored, with
+    // long arguments truncated. Use the settings panel button to clear.
 
     setup(); // Initial setup of settings, UI elements etc.
 
