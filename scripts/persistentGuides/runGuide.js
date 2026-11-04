@@ -152,7 +152,7 @@ export async function runGuideScript({ guideId, genAs = '', genCommandSuffix = '
     <summary>
         📊 ${guideName} Guide - Click to expand
     </summary>
-    <div>
+    <div markdown="1">
         ${guideContent}
     </div>
 </details>`;
@@ -181,7 +181,7 @@ export async function runGuideScript({ guideId, genAs = '', genCommandSuffix = '
     <summary>
         📊 ${guideName} Guide - Click to expand
     </summary>
-    <div>
+    <div markdown="1">
         ${content}
     </div>
 </details>`;
