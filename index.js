@@ -914,6 +914,8 @@ function updateExtensionButtons() {
         simpleSendMenuItem.innerHTML = '<i class="fa-solid fa-paper-plane fa-fw"></i><span data-i18n="Simple Send">Simple Send</span>'; // Add icon + span
         simpleSendMenuItem.title = "Sends the current input directly to the Chat without triggering a response from the Chatbot.";
         simpleSendMenuItem.addEventListener('click', (event) => {
+            // Anchor default action would navigate to '#'; on iOS that reloads the page.
+            event.preventDefault();
             simpleSend();
             ggToolsMenu.classList.remove('shown');
             event.stopPropagation();
@@ -925,6 +927,8 @@ function updateExtensionButtons() {
         recoverInputMenuItem.innerHTML = '<i class="fa-solid fa-arrow-rotate-left fa-fw"></i><span data-i18n="Recover Input">Recover Input</span>'; // Add icon + span
         recoverInputMenuItem.title = "Restores your previously typed input if it was accidentally cleared or overwritten.";
         recoverInputMenuItem.addEventListener('click', (event) => {
+            // Anchor default action would navigate to '#'; on iOS that reloads the page.
+            event.preventDefault();
             recoverInput();
             ggToolsMenu.classList.remove('shown');
             event.stopPropagation();
@@ -938,6 +942,8 @@ function updateExtensionButtons() {
         editIntrosMenuItem.innerHTML = '<i class="fa-solid fa-user-edit fa-fw"></i><span data-i18n="Edit Intros">Edit Intros</span>';
         editIntrosMenuItem.title = "Opens a popup to edit or regenerate character introductions based on various criteria.";
         editIntrosMenuItem.addEventListener('click', async (event) => {
+            // Anchor default action would navigate to '#'; on iOS that reloads the page.
+            event.preventDefault();
             const editIntros = await import('./scripts/tools/editIntros.js');
             await editIntros.default();
             ggToolsMenu.classList.remove('shown');
@@ -951,6 +957,8 @@ function updateExtensionButtons() {
         correctionsMenuItem.innerHTML = '<i class="fa-solid fa-file-alt fa-fw"></i><span data-i18n="Corrections">Corrections</span>';
         correctionsMenuItem.title = "Instructs the AI to rewrite its last message, incorporating the corrections or changes you provide in the input field.";
         correctionsMenuItem.addEventListener('click', async (event) => {
+            // Anchor default action would navigate to '#'; on iOS that reloads the page.
+            event.preventDefault();
             console.log('[GuidedGenerations] Corrections menu item clicked, starting import...');
             console.log('[GuidedGenerations] Current location:', window.location.href);
             console.log('[GuidedGenerations] Current script src:', document.currentScript?.src || 'unknown');
@@ -981,6 +989,8 @@ function updateExtensionButtons() {
         separatedThinkingMenuItem.innerHTML = '<i class="fa-solid fa-brain fa-fw"></i><span data-i18n="Separated Thinking">Separated Thinking</span>';
         separatedThinkingMenuItem.title = "Analyzes the currently shown message for logical, situational, and behavioural errors, then appends a corrected swipe.";
         separatedThinkingMenuItem.addEventListener('click', async (event) => {
+            // Anchor default action would navigate to '#'; on iOS that reloads the page.
+            event.preventDefault();
             try {
                 await runSeparatedThinkingGuarded();
                 ggToolsMenu.classList.remove('shown');
@@ -997,6 +1007,8 @@ function updateExtensionButtons() {
         spellcheckerMenuItem.innerHTML = '<i class="fa-solid fa-spell-check fa-fw"></i><span data-i18n="Spellchecker">Spellchecker</span>';
         spellcheckerMenuItem.title = "Checks and corrects the grammar, punctuation, and flow of the text currently in your input field.";
         spellcheckerMenuItem.addEventListener('click', async (event) => {
+            // Anchor default action would navigate to '#'; on iOS that reloads the page.
+            event.preventDefault();
             console.log('[GuidedGenerations] Spellchecker menu item clicked, starting import...');
             try {
                 console.log('[GuidedGenerations] About to import from central hub:', './scripts/persistentGuides/guideExports.js');
@@ -1023,6 +1035,8 @@ function updateExtensionButtons() {
         clearInputMenuItem.className = 'interactable';
         clearInputMenuItem.innerHTML = '<i class="fa-solid fa-trash fa-fw"></i><span data-i18n="Clear Input">Clear Input</span>';
         clearInputMenuItem.addEventListener('click', async (event) => {
+            // Anchor default action would navigate to '#'; on iOS that reloads the page.
+            event.preventDefault();
             const clearInput = await import('./scripts/tools/clearInput.js');
             await clearInput.default();
             ggToolsMenu.classList.remove('shown');
@@ -1036,6 +1050,8 @@ function updateExtensionButtons() {
         undoMenuItem.innerHTML = '<i class="fa-solid fa-rotate-left fa-fw"></i><span data-i18n="Undo Last Addition">Undo Last Addition</span>';
         undoMenuItem.title = 'Removes the last segment added by a guided continue action.';
         undoMenuItem.addEventListener('click', (event) => {
+            // Anchor default action would navigate to '#'; on iOS that reloads the page.
+            event.preventDefault();
             if (window.GuidedGenerations && typeof window.GuidedGenerations.undoLastGuidedAddition === 'function') {
                 window.GuidedGenerations.undoLastGuidedAddition();
             }
@@ -1050,6 +1066,8 @@ function updateExtensionButtons() {
         revertMenuItem.innerHTML = '<i class="fa-solid fa-history fa-fw"></i><span data-i18n="Revert to Original">Revert to Original</span>';
         revertMenuItem.title = 'Restores the message to its state before any guided continues were applied.';
         revertMenuItem.addEventListener('click', (event) => {
+            // Anchor default action would navigate to '#'; on iOS that reloads the page.
+            event.preventDefault();
             if (window.GuidedGenerations && typeof window.GuidedGenerations.revertToOriginalGuidedContinue === 'function') {
                 window.GuidedGenerations.revertToOriginalGuidedContinue();
             }
@@ -1080,6 +1098,8 @@ function updateExtensionButtons() {
         helpMenuItem.innerHTML = '<i class="fa-solid fa-question-circle fa-fw"></i><span data-i18n="Help">Help</span>';
         helpMenuItem.title = 'Opens the extension wiki for documentation and help.';
         helpMenuItem.addEventListener('click', (event) => {
+            // Anchor default action would navigate to '#'; on iOS that reloads the page.
+            event.preventDefault();
             // Open the GitHub wiki in a new tab/window
             const wikiUrl = 'https://github.com/Samueras/GuidedGenerations-Extension/wiki';
             window.open(wikiUrl, '_blank');
@@ -1170,6 +1190,8 @@ function updateExtensionButtons() {
             item.innerHTML = `<i class="fa-solid ${icon} fa-fw"></i><span data-i18n="${name}">${name}</span>`; // Add icon + span
             item.title = description; 
             item.addEventListener('click', (event) => {
+                // Anchor default action would navigate to '#'; on iOS that reloads the page.
+                event.preventDefault();
                 action();
                 pgToolsMenu.classList.remove('shown');
                 event.stopPropagation();
